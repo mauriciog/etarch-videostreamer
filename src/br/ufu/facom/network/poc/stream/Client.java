@@ -21,7 +21,7 @@ import br.ufu.facom.network.dlontology.FinSocket;
 import br.ufu.facom.network.dlontology.msg.Message;
 
 public class Client {
-	Timer timer; // timer used to receive data
+	//Timer timer; // timer used to receive data
 	byte[] buf; // buffer used to store data received
 
 	BufferedReader bufferedReader;
@@ -41,20 +41,60 @@ public class Client {
 	 ImageIcon icon;
 	
 	public Client(String titleServer, String titleStream) {
-		timer = new Timer(20, new TimerListener());
-		timer.setInitialDelay(0);
-		timer.setCoalesce(true);
+		//timer.setInitialDelay(0);
+		//timer.setCoalesce(true);
 
 		// allocate enough memory for the buffer used to receive data from the server
 		buf = new byte[15000];
 		
-		finSocket = FinSocket.open();
-		finSocket.register(titleServer);
-		finSocket.join(titleStream);
-		
-		createView();
-		
-		timer.start();
+		finSocket = new FinSocket();
+		if(finSocket.open()){
+			finSocket.register(titleServer);
+			finSocket.join(titleStream);
+			
+			createView();
+			
+			//timer.start();
+			startThread();
+		}else{
+			System.exit(1);
+		}
+	}
+
+	private void startThread() {
+	    new Thread(){
+	    	@Override
+	    	public void run() {
+	    	while(true){
+			try {
+				// receive the DP from the socket:
+				Message message = finSocket.read();
+				
+				byte buf[] = message.getPayload();
+				int size = buf.length;
+	
+				// create an RTPpacket object from the DP
+				RTPPacket rtp_packet = new RTPPacket(buf, size);
+	
+				// get the payload bitstream from the RTPpacket object
+				int payload_length = rtp_packet.getPayloadLength();
+				byte[] payload = new byte[payload_length];
+				rtp_packet.getPayload(payload);
+	
+				// get an Image object from the payload bitstream
+				Toolkit toolkit = Toolkit.getDefaultToolkit();
+				Image image = toolkit.createImage(payload, 0, payload_length);
+	
+				// display the image as an ImageIcon object
+				icon = new ImageIcon(image);
+				iconLabel.setIcon(icon);
+			}catch (Exception ex) {
+				ex.printStackTrace();
+				System.out.println("Exception caught: " + ex);
+			}
+	    	}
+	    	}
+	    }.start();
 	}
 
 	private void createView() {
@@ -72,48 +112,17 @@ public class Client {
 	    f.addWindowListener(new WindowAdapter() {
 	        public void windowClosing(WindowEvent e) {
 	            //stop the timer and exit
-	            timer.stop();
+	            //timer.stop();
 	            System.exit(0);
 	            endSocket();
 	     }});
+	    
 	}
 
 	private void endSocket() {
 		if(finSocket != null){
 			finSocket.disjoin(titleStream);
 			finSocket.unregister();
-		}
-	}
-	
-	class TimerListener implements ActionListener {
-		public void actionPerformed(ActionEvent e) {
-
-
-			try {
-				// receive the DP from the socket:
-				Message message = finSocket.read();
-				
-				byte buf[] = message.getPayload();
-				int size = buf.length;
-
-				// create an RTPpacket object from the DP
-				RTPPacket rtp_packet = new RTPPacket(buf, size);
-
-				// get the payload bitstream from the RTPpacket object
-				int payload_length = rtp_packet.getPayloadLength();
-				byte[] payload = new byte[payload_length];
-				rtp_packet.getPayload(payload);
-
-				// get an Image object from the payload bitstream
-				Toolkit toolkit = Toolkit.getDefaultToolkit();
-				Image image = toolkit.createImage(payload, 0, payload_length);
-
-				// display the image as an ImageIcon object
-				icon = new ImageIcon(image);
-				iconLabel.setIcon(icon);
-			}catch (Exception ex) {
-				System.out.println("Exception caught: " + ex);
-			}
 		}
 	}
 	
